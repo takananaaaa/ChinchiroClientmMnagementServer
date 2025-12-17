@@ -1,23 +1,22 @@
 package Control;
 
-//import Communication.DatabaseServerCommunication;
 
 import Communication.DatabaseServerCommunication;
 
 public class NewRegistration {
 
-    private String userName;
+    private String userID;
     private String password;
     private String name;
 
     public NewRegistration(String userName, String password) {
-        this.userName = userName;
+        this.userID = userID;
         this.password = password;
         this.name = name;
     }
 
-    public String getUserName() {
-        return userName;
+    public String getUserID() {
+        return userID;
     }
 
     public String getPassword() {
@@ -25,8 +24,8 @@ public class NewRegistration {
     }
 
     public boolean checkUserID(){
-        if(userName == null) return false;
-        if(userName.isEmpty()) return false;
+        if(userID == null) return false;
+        if(userID.isEmpty()) return false;
         return true;
     }
 
