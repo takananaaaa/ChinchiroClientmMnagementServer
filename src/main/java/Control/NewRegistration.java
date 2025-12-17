@@ -5,27 +5,25 @@ import Communication.DatabaseServerCommunication;
 
 public class NewRegistration {
 
-    private String userID;
+    private String userName;
     private String password;
-    private String name;
 
     public NewRegistration(String userName, String password) {
-        this.userID = userID;
+        this.userName = userName;
         this.password = password;
-        this.name = name;
     }
 
-    public String getUserID() {
-        return userID;
+    public String getUserName() {
+        return userName;
     }
 
     public String getPassword() {
         return password;
     }
 
-    public boolean checkUserID(){
-        if(userID == null) return false;
-        if(userID.isEmpty()) return false;
+    public boolean checkUserName(){
+        if(userName == null) return false;
+        if(userName.isEmpty()) return false;
         return true;
     }
 
@@ -41,7 +39,7 @@ public class NewRegistration {
 
     public boolean registerToDatabase() {
         // 入力チェック
-        if (!checkUserID() || !checkPassword()) {
+        if (!checkUserName() || !checkPassword()) {
             throw new IllegalStateException("UserID or Password is invalid");
         }
 
@@ -49,7 +47,7 @@ public class NewRegistration {
 
         // DBサーバとの通信
         DatabaseServerCommunication dbComm = new DatabaseServerCommunication();
-        return dbComm.registerUser(userID, name, password);
+        return dbComm.registerUser(userName, password);
     }
 
 
