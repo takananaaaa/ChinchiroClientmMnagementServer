@@ -5,7 +5,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.*;
 
-
 public class MatchingSystem {
 
     // マッチング状態情報
@@ -14,39 +13,23 @@ public class MatchingSystem {
     // マッチング待機ユーザIDリスト
     private List<String> userList;
 
-    // タイムアウト時間（秒）
-    private int timer;
+    // 制限時間（秒）← 1分
+    private final int TIME_LIMIT_SECONDS = 60;
 
-    // マッチング成立に必要な人数
-    private final int REQUIRED_USERS = 4;
+    // ゲーム開始に必要な最小人数
+    private final int MIN_USERS_TO_START = 2;
 
-    // タイマー制御用
+    // タイマー制御
     private final ScheduledExecutorService scheduler;
-    private ScheduledFuture<?> timeoutTask;
+    private ScheduledFuture<?> timerTask;
 
-    // コンストラクタ
     public MatchingSystem() {
         this.userList = Collections.synchronizedList(new ArrayList<>());
-        this.timer = 30; // 30秒タイムアウト
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
         this.matchingInfo = "WAITING";
     }
 
-    // タイマー開始（最初のユーザ参加時に呼ばれる）
-    public synchronized void startTimer() {
-        // すでにタイマーが動いている場合は何もしない
-        if (timeoutTask != null && !timeoutTask.isDone()) {
-            return;
-        }
-
-        timeoutTask = scheduler.schedule(
-                this::processOperationTimeout,
-                timer,
-                TimeUnit.SECONDS
-        );
-    }
-
-    // ユーザをマッチング待機リストに追加
+    // ユーザ参加
     public synchronized void addUser(String id) {
         if (id == null || id.isEmpty()) return;
 
@@ -56,62 +39,76 @@ public class MatchingSystem {
 
         updateMatchingInfo();
 
-        // 規定人数が揃ったらゲーム開始
-        if (userList.size() >= REQUIRED_USERS) {
-            startGame();
+        // 最初の1人が参加したらタイマー開始
+        if (userList.size() == 1) {
+            startTimer();
         }
     }
 
-    // ユーザを待機リストから削除
+    // ユーザ離脱
     public synchronized void removeUser(String id) {
         userList.remove(id);
         updateMatchingInfo();
     }
 
-    // マッチング成立時の処理
-    public synchronized void startGame() {
-        cancelTimer();
-        matchingInfo = "MATCHED";
+    // タイマー開始（1分後に判定）
+    private synchronized void startTimer() {
+        if (timerTask != null && !timerTask.isDone()) {
+            return; // すでに計測中
+        }
 
-        // 本来は ApplicationServerCommunication に通知
-        System.out.println("[Matching] Matched users = " + userList);
+        matchingInfo = "COUNTING";
+        System.out.println("[Matching] Timer started (60s)");
 
-        // マッチング成立後は待機リストをクリア
-        userList.clear();
-        updateMatchingInfo();
+        timerTask = scheduler.schedule(
+                this::judgeMatchingResult,
+                TIME_LIMIT_SECONDS,
+                TimeUnit.SECONDS
+        );
     }
 
-    // タイムアウト時の処理
-    public synchronized void processOperationTimeout() {
-        matchingInfo = "TIMEOUT";
-
-        System.out.println("[Matching] Timeout users = " + userList);
-
-        // タイムアウト時は待機リストをクリア
-        userList.clear();
-        updateMatchingInfo();
-    }
-
-    // タイマーを停止
-    private void cancelTimer() {
-        if (timeoutTask != null && !timeoutTask.isDone()) {
-            timeoutTask.cancel(false);
+    // 1分経過後の判定
+    private synchronized void judgeMatchingResult() {
+        if (userList.size() >= MIN_USERS_TO_START) {
+            startGame();
+        } else {
+            processOperationTimeout();
         }
     }
 
-    // マッチング状態文字列更新
-    private void updateMatchingInfo() {
-        matchingInfo = "WAITING(" + userList.size() + "/" + REQUIRED_USERS + ")";
+    // ゲーム開始
+    private synchronized void startGame() {
+        matchingInfo = "MATCHED";
+        System.out.println("[Matching] Game started. users=" + userList);
+
+        // 本来は ApplicationServerCommunication に通知
+        // appComm.notifyMatchingStart(userList);
+
+        userList.clear();
+        updateMatchingInfo();
+        timerTask = null;
     }
 
-    // マッチング状態取得
+    // タイムアウト処理
+    private synchronized void processOperationTimeout() {
+        matchingInfo = "TIMEOUT";
+        System.out.println("[Matching] Timeout. users=" + userList);
+
+        userList.clear();
+        updateMatchingInfo();
+        timerTask = null;
+    }
+
+    // 状態更新
+    private void updateMatchingInfo() {
+        matchingInfo = "WAITING(" + userList.size() + ")";
+    }
+
     public String getMatchingInfo() {
         return matchingInfo;
     }
 
-    // サーバ終了時の後始末
     public void shutdown() {
         scheduler.shutdownNow();
     }
-
 }
