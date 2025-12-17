@@ -34,6 +34,7 @@ public class NewRegistration {
     }
 
 
+
     /*
     public void registerToDatabase() {
         // 入力チェック
