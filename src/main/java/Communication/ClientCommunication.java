@@ -7,6 +7,7 @@ import javax.websocket.*;
 import javax.websocket.server.ServerEndpoint;
 import java.io.IOException;
 
+// WebSocketのエンドポイントとして動作させるためのアノテーション
 @ServerEndpoint("/ws")
 public class ClientCommunication {
 
@@ -26,8 +27,13 @@ public class ClientCommunication {
         this.session = session;
         System.out.println("接続開始: " + session.getId());
 
-        // コントローラを生成し、この通信クラス(this)をセットする
+        // ★重要: ここで new しているので、ユーザごとに別のコントローラーが作られます。
+        // MatchingSystem (待機リスト) は static フィールドなどで共有するように
+        // ClientManagementController 側で実装してください。
         this.managementController = new ClientManagementController();
+
+        // コントローラー側からこの通信クラスを呼べるようにセットする
+        // (ClientManagementController側に setCommunicationController メソッドが必要です)
         this.managementController.setCommunicationController(this);
     }
 
@@ -38,7 +44,7 @@ public class ClientCommunication {
     public void onMessage(String message) {
         System.out.println("受信: " + message);
         if (managementController != null) {
-            // コントローラへ処理を委譲
+            // 受信したJSON文字列をそのままコントローラへ渡す
             managementController.receiveMessage(message);
         }
     }
@@ -49,6 +55,7 @@ public class ClientCommunication {
     @OnClose
     public void onClose() {
         System.out.println("接続終了: " + (session != null ? session.getId() : "unknown"));
+        // 必要ならコントローラーに切断を通知する処理を追加
     }
 
     /**
@@ -63,10 +70,12 @@ public class ClientCommunication {
 
     /**
      * ログイン成功を通知する
+     * ★修正: バナナ数も送れるように引数を追加しました
      */
-    public void sendLoginSuccess(String userName) {
+    public void sendLoginSuccess(String userName, int bananas) {
         ResponseMessage response = new ResponseMessage("LOGIN_SUCCESS", true, "ログイン成功");
         response.userName = userName;
+        response.bananas = bananas; // バナナ数をセット
         sendMessage(response);
     }
 
@@ -114,7 +123,6 @@ public class ClientCommunication {
 
     /**
      * JSON送信の共通処理
-     * (保持している this.session に対して送信する)
      */
     private void sendMessage(Object messageObj) {
         if (this.session != null && this.session.isOpen()) {
@@ -128,13 +136,13 @@ public class ClientCommunication {
         }
     }
 
-    // 送信データのフォーマット
+    // 送信データのフォーマット（JSON変換用）
     private static class ResponseMessage {
         String type;
         boolean result;
         String message;
         String userName;
-        int bananas;
+        int bananas; // ★ログイン成功時に使用
 
         ResponseMessage(String type, boolean result, String message) {
             this.type = type;
