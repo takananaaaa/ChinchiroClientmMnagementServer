@@ -6,18 +6,18 @@ import Communication.DatabaseServerCommunication;
 
 public class NewRegistration {
 
-    private String userID;
+    private String userName;
     private String password;
     private String name;
 
-    public NewRegistration(String userID, String password) {
-        this.userID = userID;
+    public NewRegistration(String userName, String password) {
+        this.userName = userName;
         this.password = password;
         this.name = name;
     }
 
-    public String getUserID() {
-        return userID;
+    public String getUserName() {
+        return userName;
     }
 
     public String getPassword() {
@@ -25,8 +25,8 @@ public class NewRegistration {
     }
 
     public boolean checkUserID(){
-        if(userID == null) return false;
-        if(userID.isEmpty()) return false;
+        if(userName == null) return false;
+        if(userName.isEmpty()) return false;
         return true;
     }
 
