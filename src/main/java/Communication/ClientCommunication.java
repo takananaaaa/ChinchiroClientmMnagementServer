@@ -1,86 +1,145 @@
 package Communication;
 
-import javax.websocket.Session;
+import Control.ClientManagementController;
 import com.google.gson.Gson;
+
+import javax.websocket.*;
+import javax.websocket.server.ServerEndpoint;
 import java.io.IOException;
 
+@ServerEndpoint("/ws")
 public class ClientCommunication {
+
+    // この接続に関連するセッション
+    private Session session;
+
+    // この接続を担当するコントローラ
+    private ClientManagementController managementController;
 
     private Gson gson = new Gson();
 
-    // 送信データのフォーマット（内部クラス）
-    // ※後で他の人と共通化するなら別ファイルに切り出してもOK
-    private static class ResponseMessage {
-        String type;        // "LOGIN_RESULT" など
-        boolean result;     // 成功:true, 失敗:false
-        String message;     // エラーメッセージなど
-        String userName;    // ログイン成功時用
-        int bananas;        // ログイン成功時用
+    /**
+     * 接続確立時に呼ばれる
+     */
+    @OnOpen
+    public void onOpen(Session session) {
+        this.session = session;
+        System.out.println("接続開始: " + session.getId());
 
-        // コンストラクタ
-        ResponseMessage(String type, boolean result, String message) {
-            this.type = type;
-            this.result = result;
-            this.message = message;
+        // コントローラを生成し、この通信クラス(this)をセットする
+        this.managementController = new ClientManagementController();
+        this.managementController.setCommunicationController(this);
+    }
+
+    /**
+     * メッセージ受信時に呼ばれる
+     */
+    @OnMessage
+    public void onMessage(String message) {
+        System.out.println("受信: " + message);
+        if (managementController != null) {
+            // コントローラへ処理を委譲
+            managementController.receiveMessage(message);
         }
     }
 
     /**
-     * JSON送信の共通処理
+     * 切断時に呼ばれる
      */
-    private void sendMessage(Session session, Object messageObj) {
-        if (session != null && session.isOpen()) {
+    @OnClose
+    public void onClose() {
+        System.out.println("接続終了: " + (session != null ? session.getId() : "unknown"));
+    }
+
+    /**
+     * エラー時に呼ばれる
+     */
+    @OnError
+    public void onError(Throwable error) {
+        System.err.println("通信エラー: " + error.getMessage());
+    }
+
+    // --- コントローラから呼び出される送信メソッド ---
+
+    /**
+     * ログイン成功を通知する
+     */
+    public void sendLoginSuccess(String userName) {
+        ResponseMessage response = new ResponseMessage("LOGIN_SUCCESS", true, "ログイン成功");
+        response.userName = userName;
+        sendMessage(response);
+    }
+
+    /**
+     * ログイン失敗を通知する
+     */
+    public void sendLoginFailure() {
+        ResponseMessage response = new ResponseMessage("LOGIN_FAILURE", false, "ログイン失敗");
+        sendMessage(response);
+    }
+
+    /**
+     * 新規登録成功を通知する
+     */
+    public void sendRegistrationSuccess() {
+        ResponseMessage response = new ResponseMessage("REGISTER_SUCCESS", true, "新規登録成功");
+        sendMessage(response);
+    }
+
+    /**
+     * 新規登録失敗を通知する
+     */
+    public void sendRegistrationFailure(String reason) {
+        ResponseMessage response = new ResponseMessage("REGISTER_FAILURE", false, reason);
+        sendMessage(response);
+    }
+
+    /**
+     * ログアウト完了を通知する
+     */
+    public void sendLogoutResponse() {
+        ResponseMessage response = new ResponseMessage("LOGOUT_SUCCESS", true, "ログアウトしました");
+        sendMessage(response);
+    }
+
+    /**
+     * マッチング等の通知を送る
+     */
+    public void sendMatchResponse(String statusMessage) {
+        ResponseMessage response = new ResponseMessage("MATCH_STATUS", true, statusMessage);
+        sendMessage(response);
+    }
+
+    // --- 内部処理 ---
+
+    /**
+     * JSON送信の共通処理
+     * (保持している this.session に対して送信する)
+     */
+    private void sendMessage(Object messageObj) {
+        if (this.session != null && this.session.isOpen()) {
             try {
                 String json = gson.toJson(messageObj);
-                session.getBasicRemote().sendText(json);
-                System.out.println("送信(Clientへ): " + json);
+                this.session.getBasicRemote().sendText(json);
+                System.out.println("送信: " + json);
             } catch (IOException e) {
                 e.printStackTrace();
             }
         }
     }
 
-    // --- 以下、設計書に基づいたメソッド ---
+    // 送信データのフォーマット
+    private static class ResponseMessage {
+        String type;
+        boolean result;
+        String message;
+        String userName;
+        int bananas;
 
-    /**
-     * ログイン結果を送信する
-     * @param session クライアントのセッション
-     * @param result 成功ならtrue
-     * @param message 表示メッセージ
-     * @param userName ユーザ名 (失敗時はnull可)
-     * @param bananas 所持バナナ数 (失敗時は0可)
-     */
-    public void sendLoginResponse(Session session, boolean result, String message, String userName, int bananas) {
-        ResponseMessage response = new ResponseMessage("LOGIN_RESULT", result, message);
-        if (result) {
-            response.userName = userName;
-            response.bananas = bananas;
+        ResponseMessage(String type, boolean result, String message) {
+            this.type = type;
+            this.result = result;
+            this.message = message;
         }
-        sendMessage(session, response);
-    }
-
-    /**
-     * 新規登録結果を送信する
-     */
-    public void sendSignUpResponse(Session session, boolean result, String message) {
-        ResponseMessage response = new ResponseMessage("SIGNUP_RESULT", result, message);
-        sendMessage(session, response);
-    }
-
-    /**
-     * ログアウト結果を送信する
-     */
-    public void sendLogoutResponse(Session session, boolean result) {
-        ResponseMessage response = new ResponseMessage("LOGOUT_RESULT", result, "Logout processed");
-        sendMessage(session, response);
-    }
-
-    /**
-     * マッチング待機・結果などの通知を送る
-     */
-    public void sendMatchResponse(Session session, String statusMessage) {
-        // 必要に応じてtypeを "MATCH_WAIT" や "MATCH_SUCCESS" に変える
-        ResponseMessage response = new ResponseMessage("MATCH_STATUS", true, statusMessage);
-        sendMessage(session, response);
     }
 }
