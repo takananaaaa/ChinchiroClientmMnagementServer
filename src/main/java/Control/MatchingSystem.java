@@ -16,6 +16,9 @@ public class MatchingSystem {
     // 制限時間（秒）← 1分
     private final int TIME_LIMIT_SECONDS = 60;
 
+    // マッチング成立に必要な人数
+    private final int REQUIRED_USERS = 4;
+
     // ゲーム開始に必要な最小人数
     private final int MIN_USERS_TO_START = 2;
 
@@ -42,6 +45,11 @@ public class MatchingSystem {
         // 最初の1人が参加したらタイマー開始
         if (userList.size() == 1) {
             startTimer();
+        }
+
+        // 規定人数(4人)が揃ったら即座にゲーム開始
+        if (userList.size() >= REQUIRED_USERS) {
+            startGame();
         }
     }
 
