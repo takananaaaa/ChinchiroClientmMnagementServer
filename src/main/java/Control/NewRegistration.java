@@ -1,15 +1,19 @@
 package Control;
 
+//import Communication.DatabaseServerCommunication;
+
 import Communication.DatabaseServerCommunication;
 
 public class NewRegistration {
 
     private String userName;
     private String password;
+    private String name;
 
     public NewRegistration(String userName, String password) {
         this.userName = userName;
         this.password = password;
+        this.name = name;
     }
 
     public String getUserName() {
@@ -35,8 +39,8 @@ public class NewRegistration {
 
 
 
-    /*
-    public void registerToDatabase() {
+
+    public boolean registerToDatabase() {
         // 入力チェック
         if (!checkUserID() || !checkPassword()) {
             throw new IllegalStateException("UserID or Password is invalid");
@@ -46,8 +50,8 @@ public class NewRegistration {
 
         // DBサーバとの通信
         DatabaseServerCommunication dbComm = new DatabaseServerCommunication();
-        dbComm.processQuery(userID, password);
+        return dbComm.registerUser(userID, name, password);
     }
-*/
+
 
 }
