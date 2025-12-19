@@ -48,7 +48,7 @@ public class DatabaseServerCommunication {
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    return new UserData(name, rs.getInt("bananas"));
+                    return new UserData(name);
                 }
             }
         } catch (SQLException e) {
@@ -59,18 +59,16 @@ public class DatabaseServerCommunication {
 
     /**
      * 新規登録を行う
-     * バナナ数は固定値(100)で登録します
      */
-    public boolean registerUser(String id, String name, String password) {
+    public boolean registerUser(String name, String password) {
         // 初期バナナ100本でINSERT
-        String sql = "INSERT INTO users (id, name, password, bananas) VALUES (?, ?, ?, 100)";
+        String sql = "INSERT INTO users (name, password) VALUES (?, ?)";
 
         try (Connection conn = DriverManager.getConnection(DB_URL, USER, PASS);
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
-            pstmt.setString(1, id);
-            pstmt.setString(2, name);
-            pstmt.setString(3, password);
+            pstmt.setString(1, name);
+            pstmt.setString(2, password);
 
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -82,10 +80,8 @@ public class DatabaseServerCommunication {
     // データ受け渡し用の簡易クラス
     public static class UserData {
         public String name;
-        public int bananas;
-        public UserData(String name, int bananas) {
+        public UserData(String name) {
             this.name = name;
-            this.bananas = bananas;
         }
     }
 }
