@@ -12,10 +12,6 @@ public class ClientManagementController {
 
     // 通信を担当するコントローラ (ClientCommunicationからセットされる)
     private ClientCommunication communicationCtrl;
-
-    // データベース通信を担当するコントローラ
-    private DatabaseServerCommunication dbCtrl;
-
     // 各種処理クラス
     private NewRegistration newRegCtrl;
     private Login loginCtrl;
@@ -26,8 +22,6 @@ public class ClientManagementController {
      */
     public ClientManagementController() {
         // 通信クラス(communicationCtrl)はここでは生成せず、setterで受け取る
-        this.dbCtrl = new DatabaseServerCommunication();
-        this.newRegCtrl = new NewRegistration();
         this.loginCtrl = new Login();
         this.matchingCtrl = new MatchingSystem();
     }
@@ -60,14 +54,19 @@ public class ClientManagementController {
                 break;
 
             case "REGISTER":
+                // REGISTER,userName,password
                 if (parts.length >= 3) {
-                    newRegCtrl.setRegistrationInfo(parts[1], parts[2]);
+                    // 受信した情報でNewRegistrationインスタンスを生成
+                    this.newRegCtrl = new NewRegistration(parts[1], parts[2]);
                     processNewRegistration();
                 }
                 break;
 
             case "MATCHING":
-                notifyMatchingRequest();
+                // MATCHING,userName
+                if (parts.length >= 2) {
+                    notifyMatchingRequest(parts[1]);
+                }
                 break;
 
             case "LOGOUT":
@@ -84,25 +83,24 @@ public class ClientManagementController {
      * ログイン処理
      */
     public void processLogin() {
-        if (!loginCtrl.checkInput()) {
+        try {
+            // Loginクラス内で入力チェックとDB認証を行う
+            boolean isAuthenticated = loginCtrl.login();
+
+            if (isAuthenticated) {
+                String userName = loginCtrl.getUserName();
+                System.out.println("ログイン成功: " + userName);
+                communicationCtrl.sendLoginSuccess(userName);
+            } else {
+                System.out.println("ログイン失敗: " + loginCtrl.getUserName());
+                communicationCtrl.sendLoginFailure();
+            }
+        } catch (IllegalStateException e) {
+            // 入力不備の場合
+            System.out.println("ログイン処理エラー: " + e.getMessage());
             communicationCtrl.sendLoginFailure();
-            return;
-        }
-
-        String userName = loginCtrl.getUserName();
-        String password = loginCtrl.getPassword();
-
-        // DBで認証 (DatabaseServerCommunication.loginを使用)
-        boolean isAuthenticated = dbCtrl.login(userName, password);
-
-        if (isAuthenticated) {
-            // ログイン成功時、ユーザデータ(バナナ数など)を取得
-            DatabaseServerCommunication.UserData userData = dbCtrl.getUserData(userName);
-
-            System.out.println("ログイン成功: " + userName);
-            communicationCtrl.sendLoginSuccess(userName);
-        } else {
-            System.out.println("ログイン失敗: " + userName);
+        } catch (Exception e) {
+            e.printStackTrace();
             communicationCtrl.sendLoginFailure();
         }
     }
@@ -111,42 +109,40 @@ public class ClientManagementController {
      * 新規登録処理
      */
     public void processNewRegistration() {
-        /*if (!newRegCtrl.checkInput()) {
-            communicationCtrl.sendRegistrationFailure("Invalid Input");
+        if (newRegCtrl == null) {
+            communicationCtrl.sendRegistrationFailure("Internal Error");
             return;
         }
-        */
 
-        String newUserName = newRegCtrl.getUserName();
-        String newPassword = newRegCtrl.getPassword();
-
-        // 重複チェック (getUserDataでデータが取れたら既に存在する)
-        DatabaseServerCommunication.UserData existingUser = dbCtrl.getUserData(newUserName);
-
-        if (existingUser != null) {
-            System.out.println("新規登録失敗: 重複ユーザ " + newUserName);
-            communicationCtrl.sendRegistrationFailure("Duplicate Username");
-        } else {
-            // DBへ登録 (IDとNameは同じものとして扱う)
-            boolean success = dbCtrl.registerUser(newUserName, newUserName, newPassword);
+        try {
+            // NewRegistrationクラス内で入力チェックとDB登録を行う
+            boolean success = newRegCtrl.registerToDatabase();
 
             if (success) {
-                System.out.println("新規登録成功: " + newUserName);
+                System.out.println("新規登録成功: " + newRegCtrl.getUserName());
                 communicationCtrl.sendRegistrationSuccess();
             } else {
-                System.out.println("新規登録失敗: DBエラー");
-                communicationCtrl.sendRegistrationFailure("Database Error");
+                System.out.println("新規登録失敗: DBエラーまたは重複");
+                communicationCtrl.sendRegistrationFailure("Database Error or Duplicate");
             }
+
+        } catch (IllegalStateException e) {
+            System.out.println("新規登録失敗: 入力不備 - " + e.getMessage());
+            communicationCtrl.sendRegistrationFailure("Invalid Input");
+        } catch (Exception e) {
+            e.printStackTrace();
+            communicationCtrl.sendRegistrationFailure("Server Error");
         }
     }
 
     /**
      * マッチングリクエスト処理
      */
-    public void notifyMatchingRequest() {
-        System.out.println("マッチングリクエスト受信");
-        // マッチングロジックへ (実装時はユーザ名などを渡す必要あり)
-        // matchingCtrl.addUser(...);
+    public void notifyMatchingRequest(String userName) {
+        System.out.println("マッチングリクエスト受信: " + userName);
+        // マッチングシステムへユーザを追加
+        matchingCtrl.addUser(userName);
+        // クライアントへマッチング状態を通知
         communicationCtrl.sendMatchResponse("WAITING");
     }
 
