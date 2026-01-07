@@ -1,5 +1,7 @@
 package Control;
 
+import Communication.ApplicationServerCommunication;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -26,10 +28,14 @@ public class MatchingSystem {
     private final ScheduledExecutorService scheduler;
     private ScheduledFuture<?> timerTask;
 
+    // アプリケーションサーバ通信用クラス
+    private ApplicationServerCommunication appComm;
+
     public MatchingSystem() {
         this.userList = Collections.synchronizedList(new ArrayList<>());
         this.scheduler = Executors.newSingleThreadScheduledExecutor();
         this.matchingInfo = "WAITING";
+        this.appComm = new ApplicationServerCommunication();
     }
 
     // ユーザ参加
@@ -89,8 +95,9 @@ public class MatchingSystem {
         matchingInfo = "MATCHED";
         System.out.println("[Matching] Game started. users=" + userList);
 
-        // 本来は ApplicationServerCommunication に通知
-        // appComm.notifyMatchingStart(userList);
+        // アプリケーションサーバに通知
+        // userListはこの後clearされるため、現在のリストのコピーを作成して渡します
+        appComm.notifyMatchingRequest(new ArrayList<>(userList));
 
         userList.clear();
         updateMatchingInfo();
