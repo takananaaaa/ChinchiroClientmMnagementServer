@@ -1,90 +1,100 @@
 package Control;
 
 import Communication.ClientCommunication;
-import Communication.DatabaseServerCommunication;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
-/**
- * クライアント管理コントローラ
- */
 public class ClientManagementController {
 
-    // --- 属性 ---
-
-    // 通信を担当するコントローラ (ClientCommunicationからセットされる)
     private ClientCommunication communicationCtrl;
-    // 各種処理クラス
+
+    // 既存の機能（DB処理など）はそのまま保持
     private NewRegistration newRegCtrl;
     private Login loginCtrl;
-    private MatchingSystem matchingCtrl;
 
-    /**
-     * コンストラクタ
-     */
+    // ★修正1: マッチングシステムは「全ユーザーで共有」するため static final にする
+    // これにより、誰が接続しても「同じ1つの待ち行列」を使えるようになります
+    private static final MatchingSystem matchingCtrl = new MatchingSystem();
+
+    // Gson
+    private Gson gson = new Gson();
+
     public ClientManagementController() {
-        // 通信クラス(communicationCtrl)はここでは生成せず、setterで受け取る
         this.loginCtrl = new Login();
-        this.matchingCtrl = new MatchingSystem();
+        // matchingCtrl は static で初期化済みなのでここでは new しない
     }
 
-    /**
-     * 通信コントローラをセットする
-     * (ClientCommunicationのonOpenで呼ばれる)
-     */
     public void setCommunicationController(ClientCommunication communicationCtrl) {
         this.communicationCtrl = communicationCtrl;
     }
 
-    // --- 操作 ---
-
     /**
-     * クライアントからのメッセージを受信して振り分ける
+     * JSONメッセージを受信して処理を振り分ける
      */
     public void receiveMessage(String message) {
         if (message == null || message.isEmpty()) return;
 
-        String[] parts = message.split(",");
-        String requestType = parts[0];
+        System.out.println("受信データ: " + message);
 
-        switch (requestType) {
-            case "LOGIN":
-                if (parts.length >= 3) {
-                    loginCtrl.setLoginInfo(parts[1], parts[2]);
-                    processLogin();
-                }
-                break;
+        try {
+            // 1. JSONとしてパース
+            JsonObject json = JsonParser.parseString(message).getAsJsonObject();
 
-            case "REGISTER":
-                // REGISTER,userName,password
-                if (parts.length >= 3) {
-                    // 受信した情報でNewRegistrationインスタンスを生成
-                    this.newRegCtrl = new NewRegistration(parts[1], parts[2]);
-                    processNewRegistration();
-                }
-                break;
+            // 2. typeが含まれていなければ無視
+            if (!json.has("type")) return;
+            String requestType = json.get("type").getAsString();
 
-            case "MATCHING":
-                // MATCHING,userName
-                if (parts.length >= 2) {
-                    notifyMatchingRequest(parts[1]);
-                }
-                break;
+            switch (requestType) {
+                case "LOGIN":
+                    if (json.has("id") && json.has("password")) {
+                        String id = json.get("id").getAsString();
+                        String pass = json.get("password").getAsString();
+                        loginCtrl.setLoginInfo(id, pass);
+                        processLogin();
+                    }
+                    break;
 
-            case "LOGOUT":
-                processLogout();
-                break;
+                case "RESISTER":
+                case "REGISTER":
+                    if (json.has("id") && json.has("pass")) {
+                        String id = json.get("id").getAsString();
+                        String pass = json.get("pass").getAsString();
+                        this.newRegCtrl = new NewRegistration(id, pass);
+                        processNewRegistration();
+                    }
+                    break;
 
-            default:
-                System.out.println("不明なリクエスト: " + requestType);
-                break;
+                case "MATCHING":
+                    if (json.has("id")) {
+                        notifyMatchingRequest(json.get("id").getAsString());
+                    }
+                    break;
+
+                // ★追加: ログアウト時の待機列削除対応
+                case "LOGOUT":
+                    if (json.has("id")) {
+                        String id = json.get("id").getAsString();
+                        matchingCtrl.removeUser(id);
+                    }
+                    processLogout();
+                    break;
+
+                default:
+                    System.out.println("不明なリクエスト: " + requestType);
+                    break;
+            }
+        } catch (Exception e) {
+            System.err.println("JSONパースエラー: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
     /**
-     * ログイン処理
+     * ログイン処理（既存のまま）
      */
     public void processLogin() {
         try {
-            // Loginクラス内で入力チェックとDB認証を行う
             boolean isAuthenticated = loginCtrl.login();
 
             if (isAuthenticated) {
@@ -95,10 +105,6 @@ public class ClientManagementController {
                 System.out.println("ログイン失敗: " + loginCtrl.getUserName());
                 communicationCtrl.sendLoginFailure();
             }
-        } catch (IllegalStateException e) {
-            // 入力不備の場合
-            System.out.println("ログイン処理エラー: " + e.getMessage());
-            communicationCtrl.sendLoginFailure();
         } catch (Exception e) {
             e.printStackTrace();
             communicationCtrl.sendLoginFailure();
@@ -106,7 +112,7 @@ public class ClientManagementController {
     }
 
     /**
-     * 新規登録処理
+     * 新規登録処理（既存のまま）
      */
     public void processNewRegistration() {
         if (newRegCtrl == null) {
@@ -115,20 +121,15 @@ public class ClientManagementController {
         }
 
         try {
-            // NewRegistrationクラス内で入力チェックとDB登録を行う
             boolean success = newRegCtrl.registerToDatabase();
 
             if (success) {
                 System.out.println("新規登録成功: " + newRegCtrl.getUserName());
                 communicationCtrl.sendRegistrationSuccess();
             } else {
-                System.out.println("新規登録失敗: DBエラーまたは重複");
+                System.out.println("新規登録失敗");
                 communicationCtrl.sendRegistrationFailure("Database Error or Duplicate");
             }
-
-        } catch (IllegalStateException e) {
-            System.out.println("新規登録失敗: 入力不備 - " + e.getMessage());
-            communicationCtrl.sendRegistrationFailure("Invalid Input");
         } catch (Exception e) {
             e.printStackTrace();
             communicationCtrl.sendRegistrationFailure("Server Error");
@@ -136,14 +137,16 @@ public class ClientManagementController {
     }
 
     /**
-     * マッチングリクエスト処理
+     * マッチングリクエスト処理（★修正）
      */
     public void notifyMatchingRequest(String userName) {
         System.out.println("マッチングリクエスト受信: " + userName);
-        // マッチングシステムへユーザを追加
-        matchingCtrl.addUser(userName);
-        // クライアントへマッチング状態を通知
-        communicationCtrl.sendMatchResponse("WAITING");
+
+        // ★修正2: 名前と一緒に「通信機能(communicationCtrl)」を渡す
+        // これで MatchingSystem から「マッチング成立！」の連絡を送れるようになる
+        if (communicationCtrl != null) {
+            matchingCtrl.addUser(userName, this.communicationCtrl);
+        }
     }
 
     /**
@@ -151,6 +154,8 @@ public class ClientManagementController {
      */
     public void processLogout() {
         System.out.println("ログアウト処理");
-        communicationCtrl.sendLogoutResponse();
+        if (communicationCtrl != null) {
+            communicationCtrl.sendLogoutResponse();
+        }
     }
 }

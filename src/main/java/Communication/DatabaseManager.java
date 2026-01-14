@@ -22,7 +22,6 @@ public class DatabaseManager {
     public Connection getConnection() throws SQLException {
         // ポート番号が含まれているので、urlの末尾に「:」を足さないように調整
         String target = url + ":" + sqlServerPort + "/" + sqlDatabaseName;
-        // もし url 変数が "jdbc:mysql://hostname" 形式ならこれでOK
         return DriverManager.getConnection(target, sqlUserId, sqlPassword);
     }
 
@@ -43,7 +42,7 @@ public class DatabaseManager {
 
             // テーブルを削除（リセット実行）普段はコメントアウト。何か起きたときに
             //stmt.executeUpdate(dropSql);
-            //sSystem.out.println("既存のusersテーブルを削除しました。");
+            //System.out.println("既存のusersテーブルを削除しました。");
 
             // テーブルを再作成
             stmt.executeUpdate(createSql);

@@ -13,7 +13,7 @@ public class DatabaseServerCommunication {
      * ログイン認証を行う (name列を使用)
      */
     public boolean login(String name, String password) {
-        // ここが username になっているとエラーになります。必ず name にしてください。
+
         String sql = "SELECT name FROM users WHERE name = ? AND password = ?";
 
         try (Connection conn = dbManager.getConnection();
@@ -35,7 +35,7 @@ public class DatabaseServerCommunication {
      * 新規登録を行う (name列を使用)
      */
     public boolean registerUser(String name, String password) {
-        // ここも username ではなく name に修正します。
+
         String sql = "INSERT INTO users (name, password) VALUES (?, ?)";
 
         try (Connection conn = dbManager.getConnection();
